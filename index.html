@@ -1,0 +1,276 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Aventuras da Fada Rosa</title>
+    <style>
+        body {
+            margin: 0;
+            padding: 0;
+            background-color: #ffe6f2;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            height: 100vh;
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            color: #d63384;
+        }
+
+        h1 {
+            margin-bottom: 10px;
+            font-size: 28px;
+            text-shadow: 1px 1px 2px #ffb3d9;
+        }
+
+        canvas {
+            border: 4px solid #ff99cc;
+            background-color: #fff0f5;
+            box-shadow: 0 8px 20px rgba(214, 51, 132, 0.25);
+            border-radius: 12px;
+        }
+
+        .instrucoes {
+            margin-top: 12px;
+            font-size: 14px;
+            background: #ffffff;
+            padding: 8px 16px;
+            border-radius: 20px;
+            border: 1px solid #ffb3d9;
+        }
+    </style>
+</head>
+<body>
+
+    <h1>✨ O Reino da Fada Rosa ✨</h1>
+    <canvas id="gameCanvas" width="800" height="400"></canvas>
+    <div class="instrucoes">
+        <strong>Controles:</strong> Use <strong>A / D</strong> ou <strong>Setas Esquerda/Direita</strong> para andar | <strong>Espaço</strong> ou <strong>Seta para Cima</strong> para pular.
+    </div>
+
+    <script>
+        const canvas = document.getElementById("gameCanvas");
+        const ctx = canvas.getContext("2d");
+
+        const keys = {};
+
+        document.addEventListener("keydown", (e) => {
+            keys[e.code] = true;
+        });
+
+        document.addEventListener("keyup", (e) => {
+            keys[e.code] = false;
+        });
+
+        // Configuração da Fada (Jogador)
+        const fairy = {
+            x: 50,
+            y: 200,
+            width: 32,
+            height: 42,
+            speed: 5,
+            velX: 0,
+            velY: 0,
+            jumping: false,
+            grounded: false
+        };
+
+        const gravity = 0.45;
+        const friction = 0.82;
+
+        // Plataformas do jogo
+        const platforms = [
+            { x: 0, y: 360, width: 800, height: 40, color: "#ffb3d9" }, // Chão
+            { x: 120, y: 280, width: 140, height: 20, color: "#ff80bf" },
+            { x: 320, y: 220, width: 140, height: 20, color: "#ff80bf" },
+            { x: 530, y: 160, width: 160, height: 20, color: "#ff80bf" },
+            { x: 200, y: 110, width: 120, height: 20, color: "#ff80bf" }
+        ];
+
+        // Estrelas coletáveis (Moedas)
+        const stars = [
+            { x: 170, y: 240, size: 8, collected: false },
+            { x: 380, y: 180, size: 8, collected: false },
+            { x: 600, y: 120, size: 8, collected: false },
+            { x: 250, y: 70, size: 8, collected: false }
+        ];
+
+        let score = 0;
+
+        // Desenhar a Fada
+        function drawFairy() {
+            // Asas
+            ctx.fillStyle = "rgba(255, 255, 255, 0.85)";
+            ctx.beginPath();
+            ctx.ellipse(fairy.x - 2, fairy.y + 16, 12, 6, Math.PI / 4, 0, Math.PI * 2);
+            ctx.ellipse(fairy.x + fairy.width + 2, fairy.y + 16, 12, 6, -Math.PI / 4, 0, Math.PI * 2);
+            ctx.fill();
+
+            // Vestido
+            ctx.fillStyle = "#ff1a8c";
+            ctx.beginPath();
+            ctx.moveTo(fairy.x + 6, fairy.y + 18);
+            ctx.lineTo(fairy.x + fairy.width - 6, fairy.y + 18);
+            ctx.lineTo(fairy.x + fairy.width, fairy.y + fairy.height);
+            ctx.lineTo(fairy.x, fairy.y + fairy.height);
+            ctx.closePath();
+            ctx.fill();
+
+            // Cabeça
+            ctx.fillStyle = "#ffccd5";
+            ctx.beginPath();
+            ctx.arc(fairy.x + fairy.width / 2, fairy.y + 10, 10, 0, Math.PI * 2);
+            ctx.fill();
+
+            // Cabelo Rosa
+            ctx.fillStyle = "#ff66cc";
+            ctx.beginPath();
+            ctx.arc(fairy.x + fairy.width / 2, fairy.y + 8, 11, Math.PI, Math.PI * 2);
+            ctx.fill();
+        }
+
+        // Desenhar Plataformas
+        function drawPlatforms() {
+            platforms.forEach(plat => {
+                ctx.fillStyle = plat.color;
+                ctx.fillRect(plat.x, plat.y, plat.width, plat.height);
+
+                // Borda superior colorida
+                ctx.fillStyle = "#ff66b2";
+                ctx.fillRect(plat.x, plat.y, plat.width, 5);
+            });
+        }
+
+        // Desenhar Estrelas
+        function drawStars() {
+            stars.forEach(star => {
+                if (!star.collected) {
+                    ctx.fillStyle = "#ffee55";
+                    ctx.beginPath();
+                    ctx.arc(star.x, star.y, star.size, 0, Math.PI * 2);
+                    ctx.fill();
+
+                    ctx.strokeStyle = "#ffbb00";
+                    ctx.lineWidth = 2;
+                    ctx.stroke();
+                }
+            });
+        }
+
+        // Desenhar Placar
+        function drawScore() {
+            ctx.fillStyle = "#d63384";
+            ctx.font = "bold 18px Arial";
+            ctx.fillText("⭐ Estrelas: " + score + " / " + stars.length, 20, 35);
+        }
+
+        // Atualizar Posições e Física
+        function update() {
+            if (keys["ArrowRight"] || keys["KeyD"]) {
+                if (fairy.velX < fairy.speed) fairy.velX++;
+            }
+            if (keys["ArrowLeft"] || keys["KeyA"]) {
+                if (fairy.velX > -fairy.speed) fairy.velX--;
+            }
+
+            if ((keys["Space"] || keys["ArrowUp"] || keys["KeyW"]) && !fairy.jumping && fairy.grounded) {
+                fairy.jumping = true;
+                fairy.grounded = false;
+                fairy.velY = -fairy.speed * 2.2;
+            }
+
+            fairy.velX *= friction;
+            fairy.velY += gravity;
+
+            fairy.grounded = false;
+
+            platforms.forEach(plat => {
+                const dir = colCheck(fairy, plat);
+                if (dir === "l" || dir === "r") {
+                    fairy.velX = 0;
+                    fairy.jumping = false;
+                } else if (dir === "b") {
+                    fairy.grounded = true;
+                    fairy.jumping = false;
+                } else if (dir === "t") {
+                    fairy.velY *= -1;
+                }
+            });
+
+            if (fairy.grounded) {
+                fairy.velY = 0;
+            }
+
+            fairy.x += fairy.velX;
+            fairy.y += fairy.velY;
+
+            // Limites da tela
+            if (fairy.x <= 0) fairy.x = 0;
+            if (fairy.x >= canvas.width - fairy.width) fairy.x = canvas.width - fairy.width;
+
+            // Coleta de Estrelas
+            stars.forEach(star => {
+                if (!star.collected) {
+                    const distX = (fairy.x + fairy.width / 2) - star.x;
+                    const distY = (fairy.y + fairy.height / 2) - star.y;
+                    const distance = Math.sqrt(distX * distX + distY * distY);
+
+                    if (distance < fairy.width / 2 + star.size) {
+                        star.collected = true;
+                        score++;
+                    }
+                }
+            });
+        }
+
+        // Algoritmo de Colisão
+        function colCheck(shapeA, shapeB) {
+            const vX = (shapeA.x + (shapeA.width / 2)) - (shapeB.x + (shapeB.width / 2));
+            const vY = (shapeA.y + (shapeA.height / 2)) - (shapeB.y + (shapeB.height / 2));
+            const hWidths = (shapeA.width / 2) + (shapeB.width / 2);
+            const hHeights = (shapeA.height / 2) + (shapeB.height / 2);
+            let colDir = null;
+
+            if (Math.abs(vX) < hWidths && Math.abs(vY) < hHeights) {
+                const oX = hWidths - Math.abs(vX);
+                const oY = hHeights - Math.abs(vY);
+
+                if (oX >= oY) {
+                    if (vY > 0) {
+                        colDir = "t";
+                        shapeA.y += oY;
+                    } else {
+                        colDir = "b";
+                        shapeA.y -= oY;
+                    }
+                } else {
+                    if (vX > 0) {
+                        colDir = "l";
+                        shapeA.x += oX;
+                    } else {
+                        colDir = "r";
+                        shapeA.x -= oX;
+                    }
+                }
+            }
+            return colDir;
+        }
+
+        // Loop do Jogo
+        function gameLoop() {
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+            update();
+            drawPlatforms();
+            drawStars();
+            drawFairy();
+            drawScore();
+
+            requestAnimationFrame(gameLoop);
+        }
+
+        gameLoop();
+    </script>
+</body>
+</html>
